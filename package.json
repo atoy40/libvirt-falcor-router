@@ -1,0 +1,16 @@
+{
+  "scripts": {
+    "start": "nodemon server.js"
+  },
+  "dependencies": {
+    "bluebird": "^3.5.0",
+    "falcor": "^0.1.17",
+    "falcor-express": "^0.1.4",
+    "falcor-router": "^0.8.0",
+    "libvirt": "https://github.com/hooklift/node-libvirt",
+    "node-cache": "^4.1.1"
+  },
+  "devDependencies": {
+    "nodemon": "^1.11.0"
+  }
+}

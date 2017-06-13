@@ -1,0 +1,98 @@
+<link rel="import" href="bower_components/polymer/polymer.html">
+
+<dom-module id="my-app">
+
+  <template>
+    <style media="screen">
+    .container {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+    }
+    .card {
+        margin: 12px;
+        padding: 12px;
+        color: #333;
+        border-radius: 5px;
+        background-color: #fff;
+        box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 1px 5px 0 rgba(0, 0, 0, 0.12), 0 3px 1px -2px rgba(0, 0, 0, 0.2);
+        width: 250px;
+      }
+    button {
+      margin: 5px;
+      padding: 10px;
+      border: 0;
+      font-weight: bold;
+      /*box-shadow: 0px 0px 5px rgba(0,0,0,0.5);*/
+      width: 80px;
+    }
+    /*.start {
+      background-color: #2f5;
+    }
+    .stop {
+      background-color: #f25;
+    }*/
+    </style>
+    <h1>Domains</h1>
+    <div class="container">
+      <template is="dom-repeat" items="{{domains}}">
+        <div class="card">
+          <h3>{{item.name}}</h3>
+          <p><strong>CPU</strong> {{item.cpuPercent}} %</p>
+          <ul>
+             <li>{{item.info.vcpus}} VCPUs</li>
+             <li>{{item.info.memory}} Mo RAM</li>
+          </ul>
+          <div>
+            <button type="button" class="start" on-click="startDomain">start</button><button type="button" class="stop" on-click="stopDomain">stop</button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </template>
+
+  <script>
+    class MyApp extends Polymer.Element {
+
+      static get is() { return 'my-app'; }
+
+      static get properties() {
+        return {
+          domains: {
+            type: Object,
+          },
+        };
+      }
+
+      ready() {
+        super.ready();
+
+        model.get('domains[0..10]["name", "info", "uuid"]')
+        .then((value) => {
+          this.domains = Object.keys(value.json.domains).map(key => value.json.domains[key])
+
+          setInterval(() => {
+            model.get(['domainsByUUID', this.domains.map(domain => domain.uuid), 'info'])
+            .then(value => this.domains.forEach((dom, i) => {
+              var cpu = (value.json.domainsByUUID[dom.uuid].info.cpuTime - dom.info.cpuTime) / 10000000 / dom.info.vcpus;
+              this.set(['domains', i, 'cpuPercent'], cpu);
+              this.set(['domains', i, 'info'], value.json.domainsByUUID[dom.uuid].info);
+            }));
+          }, 1000);
+        });
+      }
+
+      startDomain(e) {
+        model.call(['domainsByUUID', e.model.item.uuid, 'start'])
+        .then(() => {  console.log("started") });
+      }
+
+      stopDomain(e) {
+        model.call(['domainsByUUID', e.model.item.uuid, 'stop'])
+        .then(() => {  console.log("stopped") });
+      }
+    }
+    customElements.define('my-app', MyApp);
+  </script>
+
+</dom-module>

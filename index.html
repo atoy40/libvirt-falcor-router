@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <!-- Do _not_  rely on this URL in production. Use only during development.  -->
+    <script src="bower_components/falcor/dist/falcor.browser.min.js"></script>
+    <!-- For production use. -->
+    <!-- <script src="https://cdn.jsdelivr.net/falcor/{VERSION}/falcor.browser.min.js"></script> -->
+    <script>
+      var model = new falcor.Model({source: new falcor.HttpDataSource('/model.json') });
+    </script>
+
+    <link rel="import" href="libvirt-app.html">
+
+
+
+    <style media="screen">
+      body {
+        font-family: sans-serif;
+        background-color: #f8f8f8;
+      }
+    </style>
+  </head>
+  <body>
+    <my-app></my-app>
+  </body>
+</html>

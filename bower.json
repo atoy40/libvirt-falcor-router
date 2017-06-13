@@ -1,0 +1,21 @@
+{
+  "name": "falcor-test",
+  "description": "",
+  "main": "",
+  "authors": [
+    "Anthony Hinsinger <anthony.hinsinger@univ-pau.fr>"
+  ],
+  "license": "MIT",
+  "homepage": "",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "falcor": "^0.1.17",
+    "polymer": "Polymer/polymer#^2.0.0"
+  }
+}
