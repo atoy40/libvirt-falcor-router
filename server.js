@@ -11,6 +11,7 @@ var Rx = require("rx");
 var Observable = Rx.Observable;
 
 var PORT = process.env.PORT || 8080;
+var LIBVIRT_URI = process.env.LIBVIRT_URI || "test:///default";
 
 var hvCache = new NodeCache({
   stdTTL: 60,
@@ -57,32 +58,45 @@ const HypervisorManager = {
 
 class HypervisorRouter extends FalcorRouter.createClass([
   {
-    route: 'domains[{integers:indices}]',
+    //route: 'domains[{integers:indices}]',
+    route: 'hypervisorsByURI[{keys:uris}].domains[{integers:indices}]',
     get: function(pathSet) {
-      return HypervisorManager.get(this.uri)
+      return Observable.fromArray(pathSet.uris)
+      .flatMap((uri) => {
+        return Observable.fromPromise(HypervisorManager.get(uri))
+        .flatMap(hv => hv.getAllDomains())
+        .flatMap(domains => Observable.fromArray(domains))
+        .flatMap(domain => domain.getUUIDAsync())
+        .map((uuid, index) => ({
+          path: ["hypervisorsByURI", uri, "domains", index],
+          value: { $type: 'ref', value: ['hypervisorsByURI', uri, 'domainsByUUID', uuid] } })
+        )
+      });
+
+      /*return HypervisorManager.get(this.uri)
       .then(hv => hv.getAllDomains())
       .map(domain => domain.getUUIDAsync())
-      .map((uuid, index) => ({ path: ["domains", index], value: { $type: 'ref', value: ['domainsByUUID', uuid] } }));
+      .map((uuid, index) => ({ path: ["domains", index], value: { $type: 'ref', value: ['domainsByUUID', uuid] } }));*/
     }
   },
   {
-    route: 'domainsByUUID[{keys:uuids}]["id", "uuid", "name", "info"]',
+    route: 'hypervisorsByURI[{keys:uris}].domainsByUUID[{keys:uuids}]["id", "uuid", "name", "info"]',
     get: function(pathSet) {
       return Observable.fromArray(pathSet.uuids)
       .flatMap((uuid) => {
-        return Observable.fromPromise(HypervisorManager.get(this.uri).then(hv => hv.lookupDomainByUUIDAsync(uuid)))
+        return Observable.fromPromise(HypervisorManager.get(pathSet.uris[0]).then(hv => hv.lookupDomainByUUIDAsync(uuid)))
         .flatMap((domain) => {
-          return Observable.fromArray(pathSet[2])
+          return Observable.fromArray(pathSet[4])
           .flatMap((key) => {
             switch(key) {
               case "id":
-                return domain.getIdAsync().then(id => ({ path: [pathSet[0], uuid, key], value: id }));
+                return domain.getIdAsync().then(id => ({ path: ['hypervisorsByURI', pathSet.uris[0], 'domainsByUUID', uuid, key], value: id }));
               case "name":
-                return domain.getNameAsync().then(name => ({ path: [pathSet[0], uuid, key], value: name }));
+                return domain.getNameAsync().then(name => ({ path: ['hypervisorsByURI', pathSet.uris[0], 'domainsByUUID', uuid, key], value: name }));
               case "uuid":
-                return Observable.from([{ path: [pathSet[0], uuid, key], value: uuid }]); //domain.getUUIDAsync().then(uuid => ({ path: [pathSet[0], uuid, key], value: uuid }));
+                return Observable.of({ path: ['hypervisorsByURI', pathSet.uris[0], 'domainsByUUID', uuid, key], value: uuid });
               case "info":
-                return domain.getInfoAsync().then(info => ({ path: [pathSet[0], uuid, key], value: { $type: 'atom', $expires: -100, value: info } }));
+                return domain.getInfoAsync().then(info => ({ path: ['hypervisorsByURI', pathSet.uris[0], 'domainsByUUID', uuid, key], value: { $type: 'atom', $expires: -100, value: info } }));
             }
           });
         });
@@ -90,10 +104,9 @@ class HypervisorRouter extends FalcorRouter.createClass([
     }
   },
   {
-    route: 'domainsByUUID[{keys:uuids}].["start", "stop"]',
+    route: 'hypervisorsByURI[{keys:uris}].domainsByUUID[{keys:uuids}].["start", "stop"]',
     call: function(callPath, args) {
-      console.log(callPath);
-      return HypervisorManager.get(this.uri)
+      return HypervisorManager.get(callPath.uris[0])
       .then(() => {
         return {
           path: ['domainsByUUID', callPath.uuids[0], callPath[2]],
@@ -110,7 +123,7 @@ class HypervisorRouter extends FalcorRouter.createClass([
 }
 
 app.use(bodyParser.urlencoded({ extended: false }));
-app.use('/model.json', FalcorServer.dataSourceRoute((req, res) => new HypervisorRouter("test:///default")));
+app.use('/model.json', FalcorServer.dataSourceRoute((req, res) => new HypervisorRouter(LIBVIRT_URI)));
 app.use(express.static('.'));
 
 var server = app.listen(PORT, (err) => {

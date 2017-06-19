@@ -38,8 +38,9 @@
       <template is="dom-repeat" items="{{domains}}">
         <div class="card">
           <h3>{{item.name}}</h3>
-          <p><strong>CPU</strong> {{item.cpuPercent}} %</p>
+          <p><strong>CPU</strong> {{formatCpu(item.cpuPercent)}} %</p>
           <ul>
+            <li>State : {{item.info.state}}</li>
              <li>{{item.info.vcpus}} VCPUs</li>
              <li>{{item.info.memory}} Mo RAM</li>
           </ul>
@@ -58,38 +59,55 @@
 
       static get properties() {
         return {
-          domains: {
-            type: Object,
+          hypervisor: {
+            type: String,
+            value: "qemu+ssh://root@kvmdm252.univ-pau.fr/system"
           },
+          domains: Array,
         };
+      }
+
+      static get observers() {
+        return [
+          'infoChanged(domains.splices)'
+        ];
       }
 
       ready() {
         super.ready();
 
-        model.get('domains[0..10]["name", "info", "uuid"]')
+        model.get(['hypervisorsByURI', this.hypervisor, 'domains', {from: 0, length: 10}, ["name", "info", "uuid"] ])
         .then((value) => {
-          this.domains = Object.keys(value.json.domains).map(key => value.json.domains[key])
+          var doms = value.json.hypervisorsByURI[this.hypervisor].domains;
+          this.domains = Object.keys(doms).map(key => doms[key]);
 
           setInterval(() => {
-            model.get(['domainsByUUID', this.domains.map(domain => domain.uuid), 'info'])
+            model.get(['hypervisorsByURI', this.hypervisor, 'domainsByUUID', this.domains.map(domain => domain.uuid), 'info'])
             .then(value => this.domains.forEach((dom, i) => {
-              var cpu = (value.json.domainsByUUID[dom.uuid].info.cpuTime - dom.info.cpuTime) / 10000000 / dom.info.vcpus;
-              this.set(['domains', i, 'cpuPercent'], cpu);
-              this.set(['domains', i, 'info'], value.json.domainsByUUID[dom.uuid].info);
+              var newdom = value.json.hypervisorsByURI[this.hypervisor].domainsByUUID[dom.uuid];
+              this.set(['domains', i, 'cpuPercent'], (newdom.info.cpuTime - dom.info.cpuTime) / (10000000 * dom.info.vcpus));
+              this.set(['domains', i, 'info'], newdom.info);
             }));
           }, 1000);
         });
       }
 
       startDomain(e) {
-        model.call(['domainsByUUID', e.model.item.uuid, 'start'])
+        model.call(['hypervisorsByURI', this.hypervisor, 'domainsByUUID', e.model.item.uuid, 'start'])
         .then(() => {  console.log("started") });
       }
 
       stopDomain(e) {
-        model.call(['domainsByUUID', e.model.item.uuid, 'stop'])
+        model.call(['hypervisorsByURI', this.hypervisor, 'domainsByUUID', e.model.item.uuid, 'stop'])
         .then(() => {  console.log("stopped") });
+      }
+
+      formatCpu(cpu) {
+        return cpu !== undefined ? cpu.toFixed(2) : '--.--';
+      }
+
+      infoChanged(info) {
+        console.log(info);
       }
     }
     customElements.define('my-app', MyApp);
