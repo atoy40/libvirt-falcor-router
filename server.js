@@ -11,7 +11,6 @@ var Rx = require("rx");
 var Observable = Rx.Observable;
 
 var PORT = process.env.PORT || 8080;
-var LIBVIRT_URI = process.env.LIBVIRT_URI || "test:///default";
 
 var hvCache = new NodeCache({
   stdTTL: 60,
@@ -30,15 +29,21 @@ hvCache.on('del', (key, value) => {
 const HypervisorManager = {
   get(uri) {
     var cached = hvCache.get(uri);
-
-    if (cached && cached.connected) {
+    if (cached) {
       hvCache.ttl(uri);
-      return new Promise(function(resolve) {
-        resolve(cached.handle);
+      return new Promise((resolve, reject) => {
+        if (cached.connected) {
+          return resolve(cached.handle);
+        }
+
+        var callback = (key, value) => {
+          if (key === uri && value && value.connected) {
+            hvCache.removeListener('set', callback);
+            resolve(value.handle);
+          }
+        }
+        hvCache.on('set', callback);
       });
-    } else if (cached) {
-      console.log(new Date() + " : Trying to get an unconnected hypervisor");
-      return null; // Better thing to return ?? setTimeout loop ? an Observable ?
     }
 
     var hv = libvirt.createHypervisor(uri);
@@ -58,7 +63,29 @@ const HypervisorManager = {
 
 class HypervisorRouter extends FalcorRouter.createClass([
   {
-    //route: 'domains[{integers:indices}]',
+    route: 'hypervisorsByURI[{keys:uris}]["version", "sysInfo"]',
+    get: function(pathSet) {
+      return Observable.fromArray(pathSet.uris)
+      .flatMap((uri) => {
+        return Observable.fromPromise(HypervisorManager.get(uri))
+        .flatMap((hv) => {
+          return Observable.fromArray(pathSet[2])
+          .flatMap((key) => {
+            console.log(key);
+            switch(key) {
+              case "version":
+                return hv.getVersionAsync().then((version) => {
+                  return { path: ['hypervisorsByURI', uri, key], value: 1 };
+                });
+              case "sysInfo":
+                return hv.getSysInfoAsync().then(info => ({ path: ['hypervisorsByURI', uri, key], value: info }));
+            }
+          });
+        })
+      });
+    }
+  },
+  {
     route: 'hypervisorsByURI[{keys:uris}].domains[{integers:indices}]',
     get: function(pathSet) {
       return Observable.fromArray(pathSet.uris)
@@ -72,11 +99,6 @@ class HypervisorRouter extends FalcorRouter.createClass([
           value: { $type: 'ref', value: ['hypervisorsByURI', uri, 'domainsByUUID', uuid] } })
         )
       });
-
-      /*return HypervisorManager.get(this.uri)
-      .then(hv => hv.getAllDomains())
-      .map(domain => domain.getUUIDAsync())
-      .map((uuid, index) => ({ path: ["domains", index], value: { $type: 'ref', value: ['domainsByUUID', uuid] } }));*/
     }
   },
   {
@@ -116,14 +138,13 @@ class HypervisorRouter extends FalcorRouter.createClass([
     }
   },
 ]) {
-  constructor(uri) {
+  constructor() {
     super();
-    this.uri = uri;
   }
 }
 
 app.use(bodyParser.urlencoded({ extended: false }));
-app.use('/model.json', FalcorServer.dataSourceRoute((req, res) => new HypervisorRouter(LIBVIRT_URI)));
+app.use('/model.json', FalcorServer.dataSourceRoute((req, res) => new HypervisorRouter()));
 app.use(express.static('.'));
 
 var server = app.listen(PORT, (err) => {

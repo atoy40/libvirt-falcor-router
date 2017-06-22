@@ -33,7 +33,7 @@
       background-color: #f25;
     }*/
     </style>
-    <h1>Domains</h1>
+    <h2>Domains on {{hypervisor}}</h2>
     <div class="container">
       <template is="dom-repeat" items="{{domains}}">
         <div class="card">
@@ -76,8 +76,11 @@
       ready() {
         super.ready();
 
-        model.get(['hypervisorsByURI', this.hypervisor, 'domains', {from: 0, length: 10}, ["name", "info", "uuid"] ])
-        .then((value) => {
+        model.get(
+          ['hypervisorsByURI', this.hypervisor, 'domains', {from: 0, length: 10}, ["name", "info", "uuid"] ],
+          ['hypervisorsByURI', this.hypervisor, 'version']
+        ).then((value) => {
+          console.log(value);
           var doms = value.json.hypervisorsByURI[this.hypervisor].domains;
           this.domains = Object.keys(doms).map(key => doms[key]);
 
